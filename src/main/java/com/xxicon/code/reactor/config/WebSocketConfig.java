@@ -1,6 +1,12 @@
 package com.xxicon.code.reactor.config;
 
-import com.xxicon.code.reactor.websocket.WebSocketServerHandler;
+import com.xxicon.code.reactor.core.action.ActionFactory;
+import com.xxicon.code.reactor.core.action.AutoLoadActionFactory;
+import com.xxicon.code.reactor.core.codec.AutoLoadMessageMapping;
+import com.xxicon.code.reactor.core.codec.JsonMessageCodec;
+import com.xxicon.code.reactor.core.codec.MessageCodec;
+import com.xxicon.code.reactor.core.codec.MessageMapping;
+import com.xxicon.code.reactor.core.websocket.WebSocketServerHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
@@ -9,6 +15,8 @@ import org.springframework.web.reactive.handler.SimpleUrlHandlerMapping;
 import org.springframework.web.reactive.socket.WebSocketHandler;
 import org.springframework.web.reactive.socket.server.support.WebSocketHandlerAdapter;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -16,7 +24,7 @@ import java.util.Map;
 public class WebSocketConfig {
     @Bean
     public WebSocketServerHandler webSocketServerHandler() {
-        return new WebSocketServerHandler();
+        return new WebSocketServerHandler(messageCodec());
     }
 
     @Bean
@@ -35,12 +43,25 @@ public class WebSocketConfig {
         return new WebSocketHandlerAdapter();
     }
 
-//    @Bean
-//    public RouterFunction<ServerResponse> routes() {
-//        return RouterFunctions.route()
-//                .GET("/", request -> ServerResponse.ok().body(BodyInserters.fromResource(new ClassPathResource("static/index.html"))))
-//                .GET("/app.js", request -> ServerResponse.ok().body(BodyInserters.fromResource(new ClassPathResource("static/app.js"))))
-//                .GET("/semantic.min.css", request -> ServerResponse.ok().body(BodyInserters.fromResource(new ClassPathResource("static/semantic.min.css"))))
-//                .build();
-//    }
+    @Bean
+    public ActionFactory actionFactory() {
+        AutoLoadActionFactory factory = new AutoLoadActionFactory();
+        factory.setPkgList(Collections.singletonList("com.xxicon.code.reactor.action"));
+        return factory;
+    }
+
+    @Bean
+    public MessageMapping messageMapping() {
+        AutoLoadMessageMapping messageMapping = new AutoLoadMessageMapping();
+        messageMapping.setPkgList(Arrays.asList("com.xxicon.code.reactor.message.request", "com.xxicon.code.reactor.message.response"));
+        return messageMapping;
+    }
+
+    @Bean
+    public MessageCodec<String, String> messageCodec() {
+        JsonMessageCodec codec = new JsonMessageCodec();
+        codec.setMessageMapping(messageMapping());
+        return codec;
+    }
+
 }

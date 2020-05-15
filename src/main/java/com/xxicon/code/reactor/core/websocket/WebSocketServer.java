@@ -1,6 +1,10 @@
-package com.xxicon.code.reactor.websocket;
+package com.xxicon.code.reactor.core.websocket;
 
-import com.xxicon.code.reactor.message.Message;
+import com.xxicon.code.reactor.core.Message;
+import com.xxicon.code.reactor.core.action.Action;
+import com.xxicon.code.reactor.core.action.ActionContext;
+import com.xxicon.code.reactor.core.action.ActionFactory;
+import com.xxicon.code.reactor.message.response.C001_AliveRespMsg;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
@@ -15,9 +19,11 @@ import java.time.Duration;
 @Service
 public class WebSocketServer {
     private final WebSocketServerHandler webSocketServerHandler;
+    private final ActionFactory actionFactory;
 
-    public WebSocketServer(WebSocketServerHandler webSocketServerHandler) {
+    public WebSocketServer(WebSocketServerHandler webSocketServerHandler, ActionFactory actionFactory) {
         this.webSocketServerHandler = webSocketServerHandler;
+        this.actionFactory = actionFactory;
     }
 
     @PostConstruct
@@ -28,15 +34,30 @@ public class WebSocketServer {
 
             Flux<Message> receive = sessionHandler.receive().subscribeOn(Schedulers.elastic()).doOnNext(message -> {
                 log.info("Receive [{}] {}", sessionHandler.getSessionId(), message);
-                sessionHandler.send(message);
+                String cmdId = message.unique();
+                Action action = this.actionFactory.getAction(cmdId);
+                if (action != null) {
+                    ActionContext context = new ActionContext();
+                    context.setActionKey(cmdId);
+                    context.setAction(action);
+                    context.setChannelSession(sessionHandler);
+                    context.setMessage(message);
+                    Message result = action.execute(context);
+                    context.setResult(result);
+                    if (result != null) {
+                        sessionHandler.send(result);
+                    }
+                } else {
+                    log.warn("Action is null: cmdId = {}", cmdId);
+                }
             });
 
             Mono<Message> receiveFirst = sessionHandler.receive().subscribeOn(Schedulers.elastic()).next();
-            Flux<Message> push = Flux.interval(Duration.ofSeconds(1))
+            Flux<Message> push = Flux.interval(Duration.ofSeconds(5))
                     .subscribeOn(Schedulers.elastic())
                     .takeUntil(v -> !sessionHandler.isConnected())
                     .map(String::valueOf)
-                    .map(message -> new Message("H", message))
+                    .map(message -> (Message) new C001_AliveRespMsg())
                     .doOnNext(sessionHandler::send)
                     .doOnNext(message -> log.info("Push [{}] {}", sessionHandler.getSessionId(), message));
 

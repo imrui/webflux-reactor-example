@@ -1,7 +1,8 @@
-package com.xxicon.code.reactor.websocket;
+package com.xxicon.code.reactor.core.websocket;
 
-import com.alibaba.fastjson.JSON;
-import com.xxicon.code.reactor.message.Message;
+import com.xxicon.code.reactor.core.Message;
+import com.xxicon.code.reactor.core.channel.ChannelSession;
+import com.xxicon.code.reactor.core.codec.MessageCodec;
 import org.springframework.web.reactive.socket.WebSocketMessage;
 import org.springframework.web.reactive.socket.WebSocketSession;
 import reactor.core.publisher.Flux;
@@ -12,18 +13,20 @@ import reactor.netty.channel.AbortedException;
 
 import java.nio.channels.ClosedChannelException;
 
-public class WebSocketSessionHandler {
+public class WebSocketSessionHandler implements ChannelSession {
+    private final MessageCodec<String, String> messageCodec;
     private final ReplayProcessor<Message> receiveProcessor;
     private final MonoProcessor<WebSocketSession> connectedProcessor;
     private final MonoProcessor<WebSocketSession> disconnectedProcessor;
     private boolean webSocketConnected;
     private WebSocketSession session;
 
-    public WebSocketSessionHandler() {
-        this(25);
+    public WebSocketSessionHandler(MessageCodec<String, String> messageCodec) {
+        this(messageCodec, 25);
     }
 
-    public WebSocketSessionHandler(int historySize) {
+    public WebSocketSessionHandler(MessageCodec<String, String> messageCodec, int historySize) {
+        this.messageCodec = messageCodec;
         this.receiveProcessor = ReplayProcessor.create(historySize);
         this.connectedProcessor = MonoProcessor.create();
         this.disconnectedProcessor = MonoProcessor.create();
@@ -35,7 +38,7 @@ public class WebSocketSessionHandler {
 
         Flux<Message> receive = session.receive()
                 .map(WebSocketMessage::getPayloadAsText)
-                .map(message -> JSON.parseObject(message, Message.class))
+                .map(this.messageCodec::decode)
                 .doOnNext(this.receiveProcessor::onNext)
                 .doOnComplete(this.receiveProcessor::onComplete);
 
@@ -64,9 +67,10 @@ public class WebSocketSessionHandler {
         return this.receiveProcessor;
     }
 
+    @Override
     public void send(Message message) {
         if (this.webSocketConnected) {
-            this.session.send(Mono.just(this.session.textMessage(JSON.toJSONString(message))))
+            this.session.send(Mono.just(this.session.textMessage(this.messageCodec.encode(message))))
                     .doOnError(ClosedChannelException.class, t -> this.connectionClosed())
                     .doOnError(AbortedException.class, t -> this.connectionClosed())
                     .onErrorResume(ClosedChannelException.class, t -> Mono.empty())

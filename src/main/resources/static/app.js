@@ -35,7 +35,7 @@ function disconnect() {
 function echo() {
     if (ws != null) {
         let message = document.getElementById('message').value;
-        let msg = JSON.stringify({type: 'msg', message: message})
+        let msg = JSON.stringify({cmdId: 2, message: message})
         log('[sent] - ' + msg);
         ws.send(msg);
     } else {
