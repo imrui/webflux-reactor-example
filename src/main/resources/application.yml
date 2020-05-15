@@ -3,3 +3,10 @@ server:
 logging:
   file:
     path: logs
+  level:
+    org.springframework.data.r2dbc: debug
+spring:
+  r2dbc:
+    url: r2dbc:pool:mysql://127.0.0.1/reign?characterEncoding=utf-8&serverTimezone=Asia/Shanghai
+    username: YourUsername
+    password: YourPassword
